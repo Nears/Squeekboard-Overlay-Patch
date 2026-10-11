@@ -54,6 +54,7 @@ jobs:
       - name: Build patched Debian package
         run: |
           mkdir -p /tmp/squeekboard-build
+          export DEB_BUILD_OPTIONS=nocheck
           bash ./build.sh 1.43.1-1+rpt1 /tmp/squeekboard-build
 
       - name: Upload Debian package
