@@ -1,0 +1,64 @@
+name: Build patched Squeekboard
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    container: debian:trixie
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure package sources
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates sudo
+
+          # Bootstrap the official Raspberry Pi archive keyring.
+          echo 'deb [trusted=yes] https://archive.raspberrypi.com/debian trixie main' \
+            > /etc/apt/sources.list.d/raspi-bootstrap.list
+
+          apt-get update
+          apt-get install -y raspberrypi-archive-keyring
+          rm /etc/apt/sources.list.d/raspi-bootstrap.list
+
+          cat > /etc/apt/sources.list.d/debian-src.sources <<'EOF'
+          Types: deb-src
+          URIs: https://deb.debian.org/debian
+          Suites: trixie trixie-updates
+          Components: main
+          Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+          EOF
+
+          cat > /etc/apt/sources.list.d/raspi.sources <<'EOF'
+          Types: deb deb-src
+          URIs: https://archive.raspberrypi.com/debian/
+          Suites: trixie
+          Components: main
+          Signed-By: /usr/share/keyrings/raspberrypi-archive-keyring.gpg
+          EOF
+
+          apt-get update
+
+      - name: Verify ARM64 environment
+        run: |
+          dpkg --print-architecture
+          test "$(dpkg --print-architecture)" = arm64
+
+      - name: Build patched Debian package
+        run: |
+          mkdir -p /tmp/squeekboard-build
+          bash ./build.sh 1.43.1-1+rpt1 /tmp/squeekboard-build
+
+      - name: Upload Debian package
+        uses: actions/upload-artifact@v4
+        with:
+          name: squeekboard-overlay-arm64
+          path: /tmp/squeekboard-build/*.deb
+          if-no-files-found: error
